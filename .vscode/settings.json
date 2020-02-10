@@ -1,0 +1,53 @@
+{
+  "files.associations": {
+    ".stylintrc": "jsonc",
+    ".stylelintrc": "jsonc",
+    "__functional_03": "cpp",
+    "functional": "cpp"
+  },
+
+  "editor.formatOnSave": false,
+  "editor.codeActionsOnSave": {
+      "source.fixAll.eslint": true,
+      "source.fixAll.stylelint": false,
+  },
+
+  "eslint.enable": false,
+  "eslint.validate": [
+      "javascript",
+      "javascriptreact",
+      "vue",
+      "svelte"
+  ],
+
+  "css.validate": false,
+  "scss.validate": false,
+  "postcss.validate": false,
+  "stylelint.enable": false,
+
+  "[html]": {
+      "editor.codeActionsOnSave": {
+          "source.fixAll.stylelint": true
+      }
+  },
+  "[css]": {
+      "editor.codeActionsOnSave": {
+          "source.fixAll.stylelint": true
+      }
+  },
+  "[postcss]": {
+      "editor.codeActionsOnSave": {
+          "source.fixAll.stylelint": true
+      }
+  },
+  "[vue]": {
+      "editor.codeActionsOnSave": {
+          "source.fixAll.stylelint": true
+      }
+  },
+  "[svelte]": {
+      "editor.codeActionsOnSave": {
+          "source.fixAll.stylelint": true
+      }
+  },
+}

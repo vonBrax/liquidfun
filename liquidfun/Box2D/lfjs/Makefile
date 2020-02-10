@@ -253,3 +253,8 @@ EXPORTS = EXPORTED_FUNCTIONS="[ \
 
 bindings.js:
 	$(EMSCRIPTEN)/emcc -I../ -o lf_core.js jsBindings/jsBindings.cpp $(OBJECTS) -s $(EXPORTS) -s TOTAL_MEMORY=33554432 -O2 --js-library callbacks.js
+
+# start server(quite useless, closes even before requests are complete): emrun --verbose index.html
+# better server: emrun --no_browser --port 1234 .
+# compile: emcc -I ../ -o dist/a.out.js --bind --emrun -O0 -s ERROR_ON_UNDEFINED_SYMBOLS=0 -s ASSERTIONS=1 ./jsBindings/bindings.cpp
+# compile simple: emcc -I ../ -o dist/a.out.js -O3 --bind ./jsBindings/bindings.cpp
