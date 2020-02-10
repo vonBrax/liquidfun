@@ -124,7 +124,7 @@ B2FRICTIONJOINT = \
 B2GEARJOINT = \
 	'_b2GearJoint_GetRatio', \
 	'_b2GearJointDef_Create', \
-	'_b2GearJointDef_InitializeAndCreate'
+	# '_b2GearJointDef_InitializeAndCreate'
 
 B2JOINT = \
 	'_b2Joint_GetBodyA', \
@@ -224,6 +224,7 @@ B2WORLD = \
 	'_b2World_SetGravity', \
 	'_b2World_Step'
 
+# Check if there's a definition for _GenerateOffsets
 EXPORTS = EXPORTED_FUNCTIONS="[ \
 	'_GenerateOffsets', \
 	$(B2BODY), \
@@ -251,5 +252,6 @@ EXPORTS = EXPORTED_FUNCTIONS="[ \
 	$(B2WORLD) \
 	]"
 
+# Switch back -00 to -02 or -03 for prod
 bindings.js:
-	$(EMSCRIPTEN)/emcc -I../ -o lf_core.js jsBindings/jsBindings.cpp $(OBJECTS) -s $(EXPORTS) -s TOTAL_MEMORY=33554432 -O2 --js-library callbacks.js
+	$(EMSCRIPTEN)/emcc -I ../ -o lf_core.js jsBindings/jsBindings.cpp $(OBJECTS) -s EXTRA_EXPORTED_RUNTIME_METHODS='["cwrap"]' -s EXPORTED_FUNCTIONS=$(EXPORTS) -s TOTAL_MEMORY=33554432 -O0 --js-library callbacks.js

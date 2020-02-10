@@ -39,10 +39,12 @@ double b2Body_GetInertia(void* body) {
   return ((b2Body*)body)->GetInertia();
 }
 
-void b2Body_GetLinearVelocity(void* body, float* arr) {
+void b2Body_GetLinearVelocity(void* body) {
   b2Vec2 linVelocity = ((b2Body*)body)->GetLinearVelocity();
   arr[0] = linVelocity.x;
   arr[1] = linVelocity.y;
+  // float result[2] = { linVelocity.x, linVelocity.y };
+  // return result;
 }
 
 void b2Body_GetLocalPoint(void* body, double pointX, double pointY, float* arr) {
@@ -136,4 +138,10 @@ void b2Body_SetGravityScale(void* body, double scale) {
 }
 double b2Body_GetGravityScale(void* body) {
   return ((b2Body*)body)->GetGravityScale();
+}
+
+void b2Body_CreateFixture(void* body) {
+  // FixtureDef: shape, userData, friction, restitution, density, isSensor
+  b2FixtureDef fixtureDef;
+  b2Fixture* fixture = ((b2Body*) body)->CreateFixture(b2FixtureDef);
 }

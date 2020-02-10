@@ -15,7 +15,7 @@ void b2Body_DestroyFixture(void* body, void* fixture);
 double b2Body_GetAngle(void* body);
 double b2Body_GetAngularVelocity(void* body);
 double b2Body_GetInertia(void* body);
-void b2Body_GetLinearVelocity(void* body, float* arr);
+void b2Body_GetLinearVelocity(void* body);
 void b2Body_GetLocalPoint(void* body, double pointX, double pointY, float* arr);
 void b2Body_GetLocalVector(void* body, double vX, double vY, float* arr);
 double b2Body_GetMass(void* body);
