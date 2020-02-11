@@ -1,0 +1,1 @@
+emcc -I ../ -o dist/a.out.js -O0 --emrun --bind ./jsBindings/bindings.cpp

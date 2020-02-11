@@ -20,7 +20,21 @@ var Module = typeof Module !== 'undefined' ? Module : {};
 
 // --pre-jses are emitted after the Module integration code, so that they can
 // refer to Module (if they choose; they can also define Module)
-// {{PRE_JSES}}
+// Copyright 2013 The Emscripten Authors.  All rights reserved.
+// Emscripten is available under two separate licenses, the MIT license and the
+// University of Illinois/NCSA Open Source License.  Both these licenses can be
+// found in the LICENSE file.
+
+// Route URL GET parameters to argc+argv
+if (typeof window === "object") {
+  Module['arguments'] = window.location.search.substr(1).trim().split('&');
+  // If no args were passed arguments = [''], in which case kill the single empty string.
+  if (!Module['arguments'][0]) {
+    Module['arguments'] = [];
+  }
+}
+
+
 
 // Sometimes an existing Module object exists with properties
 // meant to overwrite the default module functionality. Here
@@ -640,8 +654,8 @@ var wasmMemory;
 // In the wasm backend, we polyfill the WebAssembly object,
 // so this creates a (non-native-wasm) table for us.
 var wasmTable = new WebAssembly.Table({
-  'initial': 68,
-  'maximum': 68 + 0,
+  'initial': 230,
+  'maximum': 230 + 0,
   'element': 'anyfunc'
 });
 
@@ -1242,11 +1256,11 @@ function updateGlobalBufferAndViews(buf) {
 }
 
 var STATIC_BASE = 1024,
-    STACK_BASE = 5248128,
+    STACK_BASE = 5255216,
     STACKTOP = STACK_BASE,
-    STACK_MAX = 5248,
-    DYNAMIC_BASE = 5248128,
-    DYNAMICTOP_PTR = 5088;
+    STACK_MAX = 12336,
+    DYNAMIC_BASE = 5255216,
+    DYNAMICTOP_PTR = 12176;
 
 assert(STACK_BASE % 16 === 0, 'stack must start aligned');
 assert(DYNAMIC_BASE % 16 === 0, 'heap must start aligned');
@@ -1403,6 +1417,8 @@ function preMain() {
 
 function exitRuntime() {
   checkStackCookie();
+  callRuntimeCallbacks(__ATEXIT__);
+  
   runtimeExited = true;
 }
 
@@ -1432,6 +1448,7 @@ function addOnPreMain(cb) {
 }
 
 function addOnExit(cb) {
+  __ATEXIT__.unshift(cb);
 }
 
 function addOnPostRun(cb) {
@@ -1788,7 +1805,7 @@ var ASM_CONSTS = {
 
 
 
-// STATICTOP = STATIC_BASE + 4224;
+// STATICTOP = STATIC_BASE + 11312;
 /* global initializers */  __ATINIT__.push({ func: function() { ___wasm_call_ctors() } });
 
 
@@ -1838,7 +1855,6 @@ var ASM_CONSTS = {
 
   
   function _atexit(func, arg) {
-      warnOnce('atexit() called, but EXIT_RUNTIME is not set, so atexits() will not be called. set EXIT_RUNTIME to 1 (see the FAQ)');
       __ATEXIT__.unshift({ func: func, arg: arg });
     }function ___cxa_atexit(
   ) {
@@ -3241,6 +3257,78 @@ var ASM_CONSTS = {
     }
 
   
+  function enumReadValueFromPointer(name, shift, signed) {
+      switch (shift) {
+          case 0: return function(pointer) {
+              var heap = signed ? HEAP8 : HEAPU8;
+              return this['fromWireType'](heap[pointer]);
+          };
+          case 1: return function(pointer) {
+              var heap = signed ? HEAP16 : HEAPU16;
+              return this['fromWireType'](heap[pointer >> 1]);
+          };
+          case 2: return function(pointer) {
+              var heap = signed ? HEAP32 : HEAPU32;
+              return this['fromWireType'](heap[pointer >> 2]);
+          };
+          default:
+              throw new TypeError("Unknown integer type: " + name);
+      }
+    }function __embind_register_enum(
+      rawType,
+      name,
+      size,
+      isSigned
+    ) {
+      var shift = getShiftFromSize(size);
+      name = readLatin1String(name);
+  
+      function ctor() {
+      }
+      ctor.values = {};
+  
+      registerType(rawType, {
+          name: name,
+          constructor: ctor,
+          'fromWireType': function(c) {
+              return this.constructor.values[c];
+          },
+          'toWireType': function(destructors, c) {
+              return c.value;
+          },
+          'argPackAdvance': 8,
+          'readValueFromPointer': enumReadValueFromPointer(name, shift, isSigned),
+          destructorFunction: null,
+      });
+      exposePublicSymbol(name, ctor);
+    }
+
+  
+  function requireRegisteredType(rawType, humanName) {
+      var impl = registeredTypes[rawType];
+      if (undefined === impl) {
+          throwBindingError(humanName + " has unknown type " + getTypeName(rawType));
+      }
+      return impl;
+    }function __embind_register_enum_value(
+      rawEnumType,
+      name,
+      enumValue
+    ) {
+      var enumType = requireRegisteredType(rawEnumType, 'enum');
+      name = readLatin1String(name);
+  
+      var Enum = enumType.constructor;
+  
+      var Value = Object.create(enumType.constructor.prototype, {
+          value: {value: enumValue},
+          constructor: {value: createNamedFunction(enumType.name + '_' + name, function() {})},
+      });
+      Enum.values[enumValue] = Value;
+      Enum[name] = Value;
+    }
+
+  
   function _embind_repr(v) {
       if (v === null) {
           return 'null';
@@ -3543,12 +3631,16 @@ var ASM_CONSTS = {
       });
     }
 
+  function _abort() {
+      abort();
+    }
+
   function _emscripten_get_heap_size() {
       return HEAP8.length;
     }
 
   function _emscripten_get_sbrk_ptr() {
-      return 5088;
+      return 12176;
     }
 
   function _emscripten_memcpy_big(dest, src, num) {
@@ -3561,6 +3653,144 @@ var ASM_CONSTS = {
     }function _emscripten_resize_heap(requestedSize) {
       abortOnCannotGrowMemory(requestedSize);
     }
+
+  
+  
+  var PATH={splitPath:function(filename) {
+        var splitPathRe = /^(\/?|)([\s\S]*?)((?:\.{1,2}|[^\/]+?|)(\.[^.\/]*|))(?:[\/]*)$/;
+        return splitPathRe.exec(filename).slice(1);
+      },normalizeArray:function(parts, allowAboveRoot) {
+        // if the path tries to go above the root, `up` ends up > 0
+        var up = 0;
+        for (var i = parts.length - 1; i >= 0; i--) {
+          var last = parts[i];
+          if (last === '.') {
+            parts.splice(i, 1);
+          } else if (last === '..') {
+            parts.splice(i, 1);
+            up++;
+          } else if (up) {
+            parts.splice(i, 1);
+            up--;
+          }
+        }
+        // if the path is allowed to go above the root, restore leading ..s
+        if (allowAboveRoot) {
+          for (; up; up--) {
+            parts.unshift('..');
+          }
+        }
+        return parts;
+      },normalize:function(path) {
+        var isAbsolute = path.charAt(0) === '/',
+            trailingSlash = path.substr(-1) === '/';
+        // Normalize the path
+        path = PATH.normalizeArray(path.split('/').filter(function(p) {
+          return !!p;
+        }), !isAbsolute).join('/');
+        if (!path && !isAbsolute) {
+          path = '.';
+        }
+        if (path && trailingSlash) {
+          path += '/';
+        }
+        return (isAbsolute ? '/' : '') + path;
+      },dirname:function(path) {
+        var result = PATH.splitPath(path),
+            root = result[0],
+            dir = result[1];
+        if (!root && !dir) {
+          // No dirname whatsoever
+          return '.';
+        }
+        if (dir) {
+          // It has a dirname, strip trailing slash
+          dir = dir.substr(0, dir.length - 1);
+        }
+        return root + dir;
+      },basename:function(path) {
+        // EMSCRIPTEN return '/'' for '/', not an empty string
+        if (path === '/') return '/';
+        var lastSlash = path.lastIndexOf('/');
+        if (lastSlash === -1) return path;
+        return path.substr(lastSlash+1);
+      },extname:function(path) {
+        return PATH.splitPath(path)[3];
+      },join:function() {
+        var paths = Array.prototype.slice.call(arguments, 0);
+        return PATH.normalize(paths.join('/'));
+      },join2:function(l, r) {
+        return PATH.normalize(l + '/' + r);
+      }};var SYSCALLS={buffers:[null,[],[]],printChar:function(stream, curr) {
+        var buffer = SYSCALLS.buffers[stream];
+        assert(buffer);
+        if (curr === 0 || curr === 10) {
+          (stream === 1 ? out : err)(UTF8ArrayToString(buffer, 0));
+          buffer.length = 0;
+        } else {
+          buffer.push(curr);
+        }
+      },varargs:0,get:function(varargs) {
+        SYSCALLS.varargs += 4;
+        var ret = HEAP32[(((SYSCALLS.varargs)-(4))>>2)];
+        return ret;
+      },getStr:function() {
+        var ret = UTF8ToString(SYSCALLS.get());
+        return ret;
+      },get64:function() {
+        var low = SYSCALLS.get(), high = SYSCALLS.get();
+        if (low >= 0) assert(high === 0);
+        else assert(high === -1);
+        return low;
+      },getZero:function() {
+        assert(SYSCALLS.get() === 0);
+      }};function _fd_close(fd) {try {
+  
+      abort('it should not be possible to operate on streams when !SYSCALLS_REQUIRE_FILESYSTEM');
+      return 0;
+    } catch (e) {
+    if (typeof FS === 'undefined' || !(e instanceof FS.ErrnoError)) abort(e);
+    return e.errno;
+  }
+  }
+
+  function _fd_seek(fd, offset_low, offset_high, whence, newOffset) {try {
+  
+      abort('it should not be possible to operate on streams when !SYSCALLS_REQUIRE_FILESYSTEM');
+      return 0;
+    } catch (e) {
+    if (typeof FS === 'undefined' || !(e instanceof FS.ErrnoError)) abort(e);
+    return e.errno;
+  }
+  }
+
+  
+  function flush_NO_FILESYSTEM() {
+      // flush anything remaining in the buffers during shutdown
+      var fflush = Module["_fflush"];
+      if (fflush) fflush(0);
+      var buffers = SYSCALLS.buffers;
+      if (buffers[1].length) SYSCALLS.printChar(1, 10);
+      if (buffers[2].length) SYSCALLS.printChar(2, 10);
+    }function _fd_write(fd, iov, iovcnt, pnum) {try {
+  
+      // hack to support printf in SYSCALLS_REQUIRE_FILESYSTEM=0
+      var num = 0;
+      for (var i = 0; i < iovcnt; i++) {
+        var ptr = HEAP32[(((iov)+(i*8))>>2)];
+        var len = HEAP32[(((iov)+(i*8 + 4))>>2)];
+        for (var j = 0; j < len; j++) {
+          SYSCALLS.printChar(fd, HEAPU8[ptr+j]);
+        }
+        num += len;
+      }
+      HEAP32[((pnum)>>2)]=num
+      return 0;
+    } catch (e) {
+    if (typeof FS === 'undefined' || !(e instanceof FS.ErrnoError)) abort(e);
+    return e.errno;
+  }
+  }
 
   
   function _memcpy(dest, src, num) {
@@ -3683,6 +3913,10 @@ var ASM_CONSTS = {
       }
       return (end-num)|0;
     }
+
+  function _setTempRet0($i) {
+      setTempRet0(($i) | 0);
+    }
 embind_init_charCodes();
 BindingError = Module['BindingError'] = extendError(Error, 'BindingError');;
 InternalError = Module['InternalError'] = extendError(Error, 'InternalError');;
@@ -3691,6 +3925,7 @@ init_RegisteredPointer();
 init_embind();;
 UnboundTypeError = Module['UnboundTypeError'] = extendError(Error, 'UnboundTypeError');;
 init_emval();;
+__ATEXIT__.push(flush_NO_FILESYSTEM);;
 var ASSERTIONS = true;
 
 // Copyright 2017 The Emscripten Authors.  All rights reserved.
@@ -3726,7 +3961,7 @@ function intArrayToString(array) {
 // ASM_LIBRARY EXTERN PRIMITIVES: Int8Array,Int32Array
 
 var asmGlobalArg = {};
-var asmLibraryArg = { "__cxa_atexit": ___cxa_atexit, "__handle_stack_overflow": ___handle_stack_overflow, "__lock": ___lock, "__unlock": ___unlock, "_embind_register_bool": __embind_register_bool, "_embind_register_class": __embind_register_class, "_embind_register_class_constructor": __embind_register_class_constructor, "_embind_register_class_function": __embind_register_class_function, "_embind_register_class_property": __embind_register_class_property, "_embind_register_emval": __embind_register_emval, "_embind_register_float": __embind_register_float, "_embind_register_integer": __embind_register_integer, "_embind_register_memory_view": __embind_register_memory_view, "_embind_register_std_string": __embind_register_std_string, "_embind_register_std_wstring": __embind_register_std_wstring, "_embind_register_void": __embind_register_void, "emscripten_get_sbrk_ptr": _emscripten_get_sbrk_ptr, "emscripten_memcpy_big": _emscripten_memcpy_big, "emscripten_resize_heap": _emscripten_resize_heap, "memory": wasmMemory, "table": wasmTable };
+var asmLibraryArg = { "__cxa_atexit": ___cxa_atexit, "__handle_stack_overflow": ___handle_stack_overflow, "__lock": ___lock, "__unlock": ___unlock, "_embind_register_bool": __embind_register_bool, "_embind_register_class": __embind_register_class, "_embind_register_class_constructor": __embind_register_class_constructor, "_embind_register_class_function": __embind_register_class_function, "_embind_register_class_property": __embind_register_class_property, "_embind_register_emval": __embind_register_emval, "_embind_register_enum": __embind_register_enum, "_embind_register_enum_value": __embind_register_enum_value, "_embind_register_float": __embind_register_float, "_embind_register_integer": __embind_register_integer, "_embind_register_memory_view": __embind_register_memory_view, "_embind_register_std_string": __embind_register_std_string, "_embind_register_std_wstring": __embind_register_std_wstring, "_embind_register_void": __embind_register_void, "abort": _abort, "emscripten_get_sbrk_ptr": _emscripten_get_sbrk_ptr, "emscripten_memcpy_big": _emscripten_memcpy_big, "emscripten_resize_heap": _emscripten_resize_heap, "fd_close": _fd_close, "fd_seek": _fd_seek, "fd_write": _fd_write, "memory": wasmMemory, "setTempRet0": _setTempRet0, "table": wasmTable };
 var asm = createWasm();
 Module["asm"] = asm;
 var ___wasm_call_ctors = Module["___wasm_call_ctors"] = function() {
@@ -3819,6 +4054,30 @@ var dynCall_ii = Module["dynCall_ii"] = function() {
   return Module["asm"]["dynCall_ii"].apply(null, arguments)
 };
 
+var dynCall_vi = Module["dynCall_vi"] = function() {
+  assert(runtimeInitialized, 'you need to wait for the runtime to be ready (e.g. wait for main() to be called)');
+  assert(!runtimeExited, 'the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)');
+  return Module["asm"]["dynCall_vi"].apply(null, arguments)
+};
+
+var dynCall_iiii = Module["dynCall_iiii"] = function() {
+  assert(runtimeInitialized, 'you need to wait for the runtime to be ready (e.g. wait for main() to be called)');
+  assert(!runtimeExited, 'the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)');
+  return Module["asm"]["dynCall_iiii"].apply(null, arguments)
+};
+
+var dynCall_iii = Module["dynCall_iii"] = function() {
+  assert(runtimeInitialized, 'you need to wait for the runtime to be ready (e.g. wait for main() to be called)');
+  assert(!runtimeExited, 'the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)');
+  return Module["asm"]["dynCall_iii"].apply(null, arguments)
+};
+
+var dynCall_viff = Module["dynCall_viff"] = function() {
+  assert(runtimeInitialized, 'you need to wait for the runtime to be ready (e.g. wait for main() to be called)');
+  assert(!runtimeExited, 'the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)');
+  return Module["asm"]["dynCall_viff"].apply(null, arguments)
+};
+
 var dynCall_viif = Module["dynCall_viif"] = function() {
   assert(runtimeInitialized, 'you need to wait for the runtime to be ready (e.g. wait for main() to be called)');
   assert(!runtimeExited, 'the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)');
@@ -3831,22 +4090,16 @@ var dynCall_fii = Module["dynCall_fii"] = function() {
   return Module["asm"]["dynCall_fii"].apply(null, arguments)
 };
 
-var dynCall_iii = Module["dynCall_iii"] = function() {
-  assert(runtimeInitialized, 'you need to wait for the runtime to be ready (e.g. wait for main() to be called)');
-  assert(!runtimeExited, 'the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)');
-  return Module["asm"]["dynCall_iii"].apply(null, arguments)
-};
-
-var dynCall_vi = Module["dynCall_vi"] = function() {
-  assert(runtimeInitialized, 'you need to wait for the runtime to be ready (e.g. wait for main() to be called)');
-  assert(!runtimeExited, 'the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)');
-  return Module["asm"]["dynCall_vi"].apply(null, arguments)
-};
-
 var dynCall_iiff = Module["dynCall_iiff"] = function() {
   assert(runtimeInitialized, 'you need to wait for the runtime to be ready (e.g. wait for main() to be called)');
   assert(!runtimeExited, 'the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)');
   return Module["asm"]["dynCall_iiff"].apply(null, arguments)
+};
+
+var dynCall_viiff = Module["dynCall_viiff"] = function() {
+  assert(runtimeInitialized, 'you need to wait for the runtime to be ready (e.g. wait for main() to be called)');
+  assert(!runtimeExited, 'the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)');
+  return Module["asm"]["dynCall_viiff"].apply(null, arguments)
 };
 
 var dynCall_vii = Module["dynCall_vii"] = function() {
@@ -3855,10 +4108,16 @@ var dynCall_vii = Module["dynCall_vii"] = function() {
   return Module["asm"]["dynCall_vii"].apply(null, arguments)
 };
 
-var dynCall_iiii = Module["dynCall_iiii"] = function() {
+var dynCall_viii = Module["dynCall_viii"] = function() {
   assert(runtimeInitialized, 'you need to wait for the runtime to be ready (e.g. wait for main() to be called)');
   assert(!runtimeExited, 'the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)');
-  return Module["asm"]["dynCall_iiii"].apply(null, arguments)
+  return Module["asm"]["dynCall_viii"].apply(null, arguments)
+};
+
+var dynCall_i = Module["dynCall_i"] = function() {
+  assert(runtimeInitialized, 'you need to wait for the runtime to be ready (e.g. wait for main() to be called)');
+  assert(!runtimeExited, 'the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)');
+  return Module["asm"]["dynCall_i"].apply(null, arguments)
 };
 
 var dynCall_iiiii = Module["dynCall_iiiii"] = function() {
@@ -3867,16 +4126,34 @@ var dynCall_iiiii = Module["dynCall_iiiii"] = function() {
   return Module["asm"]["dynCall_iiiii"].apply(null, arguments)
 };
 
-var dynCall_viii = Module["dynCall_viii"] = function() {
-  assert(runtimeInitialized, 'you need to wait for the runtime to be ready (e.g. wait for main() to be called)');
-  assert(!runtimeExited, 'the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)');
-  return Module["asm"]["dynCall_viii"].apply(null, arguments)
-};
-
 var dynCall_viiii = Module["dynCall_viiii"] = function() {
   assert(runtimeInitialized, 'you need to wait for the runtime to be ready (e.g. wait for main() to be called)');
   assert(!runtimeExited, 'the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)');
   return Module["asm"]["dynCall_viiii"].apply(null, arguments)
+};
+
+var dynCall_v = Module["dynCall_v"] = function() {
+  assert(runtimeInitialized, 'you need to wait for the runtime to be ready (e.g. wait for main() to be called)');
+  assert(!runtimeExited, 'the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)');
+  return Module["asm"]["dynCall_v"].apply(null, arguments)
+};
+
+var dynCall_fif = Module["dynCall_fif"] = function() {
+  assert(runtimeInitialized, 'you need to wait for the runtime to be ready (e.g. wait for main() to be called)');
+  assert(!runtimeExited, 'the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)');
+  return Module["asm"]["dynCall_fif"].apply(null, arguments)
+};
+
+var dynCall_jiji = Module["dynCall_jiji"] = function() {
+  assert(runtimeInitialized, 'you need to wait for the runtime to be ready (e.g. wait for main() to be called)');
+  assert(!runtimeExited, 'the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)');
+  return Module["asm"]["dynCall_jiji"].apply(null, arguments)
+};
+
+var dynCall_iidiiii = Module["dynCall_iidiiii"] = function() {
+  assert(runtimeInitialized, 'you need to wait for the runtime to be ready (e.g. wait for main() to be called)');
+  assert(!runtimeExited, 'the runtime was exited (use NO_EXIT_RUNTIME to keep it alive after main() exits)');
+  return Module["asm"]["dynCall_iidiiii"].apply(null, arguments)
 };
 
 var dynCall_viiiiii = Module["dynCall_viiiiii"] = function() {
@@ -3925,7 +4202,7 @@ if (!Object.getOwnPropertyDescriptor(Module, "stackTrace")) Module["stackTrace"]
 if (!Object.getOwnPropertyDescriptor(Module, "addOnPreRun")) Module["addOnPreRun"] = function() { abort("'addOnPreRun' was not exported. add it to EXTRA_EXPORTED_RUNTIME_METHODS (see the FAQ)") };
 if (!Object.getOwnPropertyDescriptor(Module, "addOnInit")) Module["addOnInit"] = function() { abort("'addOnInit' was not exported. add it to EXTRA_EXPORTED_RUNTIME_METHODS (see the FAQ)") };
 if (!Object.getOwnPropertyDescriptor(Module, "addOnPreMain")) Module["addOnPreMain"] = function() { abort("'addOnPreMain' was not exported. add it to EXTRA_EXPORTED_RUNTIME_METHODS (see the FAQ)") };
-if (!Object.getOwnPropertyDescriptor(Module, "addOnExit")) Module["addOnExit"] = function() { abort("'addOnExit' was not exported. add it to EXTRA_EXPORTED_RUNTIME_METHODS (see the FAQ)") };
+Module["addOnExit"] = addOnExit;
 if (!Object.getOwnPropertyDescriptor(Module, "addOnPostRun")) Module["addOnPostRun"] = function() { abort("'addOnPostRun' was not exported. add it to EXTRA_EXPORTED_RUNTIME_METHODS (see the FAQ)") };
 if (!Object.getOwnPropertyDescriptor(Module, "writeStringToMemory")) Module["writeStringToMemory"] = function() { abort("'writeStringToMemory' was not exported. add it to EXTRA_EXPORTED_RUNTIME_METHODS (see the FAQ)") };
 if (!Object.getOwnPropertyDescriptor(Module, "writeArrayToMemory")) Module["writeArrayToMemory"] = function() { abort("'writeArrayToMemory' was not exported. add it to EXTRA_EXPORTED_RUNTIME_METHODS (see the FAQ)") };
@@ -4052,38 +4329,8 @@ function run(args) {
 }
 Module['run'] = run;
 
-function checkUnflushedContent() {
-  // Compiler settings do not allow exiting the runtime, so flushing
-  // the streams is not possible. but in ASSERTIONS mode we check
-  // if there was something to flush, and if so tell the user they
-  // should request that the runtime be exitable.
-  // Normally we would not even include flush() at all, but in ASSERTIONS
-  // builds we do so just for this check, and here we see if there is any
-  // content to flush, that is, we check if there would have been
-  // something a non-ASSERTIONS build would have not seen.
-  // How we flush the streams depends on whether we are in SYSCALLS_REQUIRE_FILESYSTEM=0
-  // mode (which has its own special function for this; otherwise, all
-  // the code is inside libc)
-  var print = out;
-  var printErr = err;
-  var has = false;
-  out = err = function(x) {
-    has = true;
-  }
-  try { // it doesn't matter if it fails
-    var flush = null;
-    if (flush) flush(0);
-  } catch(e) {}
-  out = print;
-  err = printErr;
-  if (has) {
-    warnOnce('stdio streams had content in them that was not flushed. you should set EXIT_RUNTIME to 1 (see the FAQ), or make sure to emit a newline when you printf etc.');
-    warnOnce('(this may also be due to not including full filesystem support - try building with -s FORCE_FILESYSTEM=1)');
-  }
-}
 
 function exit(status, implicit) {
-  checkUnflushedContent();
 
   // if this is just main exit-ing implicitly, and the status is 0, then we
   // don't need to do anything here and can just leave. if the status is
@@ -4096,7 +4343,7 @@ function exit(status, implicit) {
   if (noExitRuntime) {
     // if exit() was called, we may warn the user if the runtime isn't actually being shut down
     if (!implicit) {
-      err('program exited (with status: ' + status + '), but EXIT_RUNTIME is not set, so halting execution but not exiting the runtime or preventing further async execution (build with EXIT_RUNTIME=1, if you want a true shutdown)');
+      err('program exited (with status: ' + status + '), but noExitRuntime is set due to an async operation, so halting execution but not exiting the runtime or preventing further async execution (you can use emscripten_force_exit, if you want to force a true shutdown)');
     }
   } else {
 
@@ -4119,7 +4366,6 @@ if (Module['preInit']) {
 }
 
 
-  noExitRuntime = true;
 
 run();
 
@@ -4130,4 +4376,74 @@ run();
 // {{MODULE_ADDITIONS}}
 
 
+
+// Copyright 2013 The Emscripten Authors.  All rights reserved.
+// Emscripten is available under two separate licenses, the MIT license and the
+// University of Illinois/NCSA Open Source License.  Both these licenses can be
+// found in the LICENSE file.
+
+if (typeof window === "object" && (typeof ENVIRONMENT_IS_PTHREAD === 'undefined' || !ENVIRONMENT_IS_PTHREAD)) {
+  var emrun_register_handlers = function() {
+    // When C code exit()s, we may still have remaining stdout and stderr messages in flight. In that case, we can't close
+    // the browser until all those XHRs have finished, so the following state variables track that all communication is done,
+    // after which we can close.
+    var emrun_num_post_messages_in_flight = 0;
+    var emrun_should_close_itself = false;
+    var postExit = function(msg) {
+      var http = new XMLHttpRequest();
+      // Don't do this immediately, this may race with the notification about the return code reaching the
+      // server. Send a *sync* xhr so that we know for sure that the server has gotten the return code
+      // before we continue.
+      http.open("POST", "stdio.html", false);
+      http.send(msg);
+      try {
+        // Try closing the current browser window, since it exit()ed itself. This can shut down the browser process
+        // and then emrun does not need to kill the whole browser process.
+        window.close();
+      } catch(e) {}
+    };
+    var post = function(msg) {
+      var http = new XMLHttpRequest();
+      ++emrun_num_post_messages_in_flight;
+      http.onreadystatechange = function() {
+        if (http.readyState == 4 /*DONE*/) {
+          if (--emrun_num_post_messages_in_flight == 0 && emrun_should_close_itself) postExit('^exit^'+EXITSTATUS);
+        }
+      }
+      http.open("POST", "stdio.html", true);
+      http.send(msg);
+    };
+    // If the address contains localhost, or we are running the page from port 6931, we can assume we're running the test runner and should post stdout logs.
+    if (document.URL.search("localhost") != -1 || document.URL.search(":6931/") != -1) {
+      var emrun_http_sequence_number = 1;
+      var prevPrint = out;
+      var prevErr = err;
+      Module['addOnExit'](function() { if (emrun_num_post_messages_in_flight == 0) postExit('^exit^'+EXITSTATUS); else emrun_should_close_itself = true; });
+      out = function(text) { post('^out^'+(emrun_http_sequence_number++)+'^'+encodeURIComponent(text)); prevPrint(text); };
+      err = function(text) { post('^err^'+(emrun_http_sequence_number++)+'^'+encodeURIComponent(text)); prevErr(text); };
+
+      // Notify emrun web server that this browser has successfully launched the page. Note that we may need to
+      // wait for the server to be ready.
+      var tryToSendPageload = function() {
+        try {
+          post('^pageload^');
+        } catch (e) {
+          setTimeout(tryToSendPageload, 50);
+        }
+      };
+      tryToSendPageload();
+    }
+  };
+
+  // POSTs the given binary data represented as a (typed) array data back to the emrun-based web server.
+  // To use from C code, call e.g. EM_ASM({emrun_file_dump("file.dat", HEAPU8.subarray($0, $0 + $1));}, my_data_pointer, my_data_pointer_byte_length);
+  var emrun_file_dump = function(filename, data) {
+    var http = new XMLHttpRequest();
+    out('Dumping out file "' + filename + '" with ' + data.length + ' bytes of data.');
+    http.open("POST", "stdio.html?file=" + filename, true);
+    http.send(data); // XXX  this does not work in workers, for some odd reason (issue #2681)
+  };
+
+  if (typeof Module !== 'undefined' && typeof document !== 'undefined') emrun_register_handlers();
+}
 

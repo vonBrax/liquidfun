@@ -8,18 +8,23 @@
 <body>
   <h1>Hello World</h1>
   <script src="dist/a.out.js"></script>
+  <script src="dist/main.js"></script>
   <script>
+    Module.onRuntimeInitialized = window.__onRuntimeReady;
+  </script>
+  <!-- <script>
     Module.onRuntimeInitialized = () => {
+      console.log('Runtime initialized');
+      console.log(Module);
       const gravity = new Module.Vec2(0, -10)
-      // const world = new Module.World(gravity);
-      console.log('We should be fine, right?');
       console.log(gravity);
       const world = new Module.World(gravity);
-      console.log('Got the world?');
-      console.log(world);
-      console.log(world.GetGravity());
-      console.log('done');
+      const bodyDef = new Module.BodyDef();
+      console.log(bodyDef);
+      bodyDef.allowSlep = false;
+      const body = world.CreateBody(bodyDef);
+      console.log(body);
     }
-  </script>
+  </script> -->
 </body>
 </html>
