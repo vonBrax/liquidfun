@@ -1,6 +1,3 @@
-#include <emscripten/bind.h>
-#include <Box2D/Box2D.h>
-
 namespace emscripten {
 
   namespace internal {
@@ -32,15 +29,7 @@ EMSCRIPTEN_BINDINGS(body_module) {
     .property("gravityScale", &b2BodyDef::gravityScale);
 
   class_<b2Body>("Body")
-    .function(
-      "CreateFixture",
-      select_overload<b2Fixture*(b2FixtureDef*)>(&b2Body::CreateFixture),
-      allow_raw_pointers()
-    )
-    .function(
-      "CreateFixtureShape",
-      select_overload<b2Fixture(b2Shape,float)>(&b2Body::CreateFixture),
-      allow_raw_pointers()
-    );
+    .function("CreateFixture", select_overload<b2Fixture*(const b2FixtureDef*)>(&b2Body::CreateFixture), allow_raw_pointers())
+    .function("CreateFixture", select_overload<b2Fixture*(const b2Shape*, float)>(&b2Body::CreateFixture), allow_raw_pointers());
 }
 }
