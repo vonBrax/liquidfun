@@ -41,7 +41,7 @@ class b2ParticleGroup;
 /// The world class manages all physics entities, dynamic simulation,
 /// and asynchronous queries. The world also contains efficient memory
 /// management facilities.
-class b2World
+class alignas(16) b2World
 {
 public:
 	/// Construct a world object.
