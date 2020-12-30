@@ -52,8 +52,6 @@ struct DrawWrapper : public wrapper<b2Draw> {
   }
 
   void DrawSolidPolygon(const b2Vec2* vertices, int32 vertexCount, const b2Color& color) {
-    printf("Mama mia! Here I go again!");
-
     return call<void>("DrawSolidPolygon", vertices, vertexCount, color);
   }
 
